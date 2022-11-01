@@ -108,12 +108,12 @@ class PhotographerController {
       const { photoName } = photosArray[i][2];
       const startIndex = photoName.lastIndexOf('.') + 1;
       const photoExtension = photoName.substr(startIndex).toLowerCase();
-
       const { url, fields } = s3.createPresignedPost({
         Fields: {
           // key: `${photographerId}/${albumId}/${uuidv4()}.${photoExtension}`,
           key: `${uuidv4()}.${photoExtension}`,
           'Content-Type': `image/${photoExtension}`,
+          'Content-Disposition': `attachment;filename=${photoName}`,
           'x-amz-meta-people': metadata,
           'x-amz-meta-photographerId': photographerId,
           'x-amz-meta-albumId': albumId,
