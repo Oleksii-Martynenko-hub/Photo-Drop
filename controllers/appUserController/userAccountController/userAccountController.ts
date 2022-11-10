@@ -102,7 +102,7 @@ class UserAccountController {
               }
             }
             const uniqueAlbumIds = [...new Set(albumIds)];
-            const startString = 'https://userAppUrl/albumId=';
+            const startString = 'https://dev-photodrop-client.vercel.app/albums/';
             let finalString = '';
             uniqueAlbumIds.forEach((albumId) => {
               finalString += `${startString}${albumId}\n\n`;

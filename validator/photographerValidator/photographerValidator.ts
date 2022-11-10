@@ -9,6 +9,7 @@ class PhotographerValidator {
   }
 
   checkCreateAlbum() {
+    // DO TO: check regex
     const regex = /^[\w\s]+$/;
     return [
       body('name').custom((value) => {

@@ -77,9 +77,10 @@ interface PersonAttributes {
   id: string;
   phone: string,
   name: string,
+  // addPhoto: any
 }
 
-interface PersonCreationAttributes extends Optional<PersonAttributes, 'id' | 'name'> { }
+interface PersonCreationAttributes extends Optional<PersonAttributes, 'id' | 'name' > { }
 interface PersonInstance extends
   Model<PersonAttributes, PersonCreationAttributes>,
   PersonAttributes { }
@@ -101,6 +102,20 @@ interface AppUserCreationAttributes extends Optional<AppUserAttributes, 'id' | '
 interface AppUserInstance extends
   Model<AppUserAttributes, AppUserCreationAttributes>,
   AppUserAttributes { }
+
+// UserOTP
+
+interface UserOTPAttributes {
+  id: string,
+  phone: string,
+  otp: string,
+  otpCreated: number
+}
+
+interface UserOTPCreationAttributes extends Optional<UserOTPAttributes, 'id' | 'otpCreated'> { }
+interface UserOTPInstance extends
+  Model<UserOTPAttributes, UserOTPCreationAttributes>,
+  UserOTPAttributes { }
 
 // Selfie
 
@@ -162,6 +177,7 @@ export {
   PhotoMiniWaterMarkInstance,
   PersonInstance,
   AppUserInstance,
+  UserOTPInstance,
   SelfieInstance,
   SelfieMiniInstance,
   UserAlbumInstance,

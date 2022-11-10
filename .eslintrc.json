@@ -24,6 +24,7 @@
             "error",
             "windows"
         ],
+        "max-len": "off",
         "camelcase": "off",
         "no-console": "off"
     }

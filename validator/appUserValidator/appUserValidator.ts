@@ -7,6 +7,14 @@ class AppUserValidator {
     ];
   }
 
+  checkOTP() {
+    return [
+      query('phone').notEmpty().withMessage('The phone value should not be empty'),
+      query('otp').notEmpty().withMessage('The otp value should not be empty'),
+
+    ];
+  }
+
   checkCreateAppUser() {
     return [
       body('phone').notEmpty().withMessage('The phone value should not be empty'),
@@ -95,6 +103,13 @@ class AppUserValidator {
       query('albumId').notEmpty().withMessage('The albumId value should not be empty'),
       query('userId').notEmpty().withMessage('The userId value should not be empty'),
       query('originalKey').notEmpty().withMessage('The originalKey value should not be empty'),
+    ];
+  }
+
+  checkGeneratePayment() {
+    return [
+      query('albumId').notEmpty().withMessage('The albumId value should not be empty'),
+      query('userId').notEmpty().withMessage('The userId value should not be empty'),
     ];
   }
 }

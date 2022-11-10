@@ -16,6 +16,7 @@ const start = async () => {
   try {
     await sequelize.authenticate();
     await sequelize.sync(); // будет сверят состояние базы данных со схемой данных
+    // /force: true - deletes everything!!!
     app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
   } catch (e) {
     console.log(e);

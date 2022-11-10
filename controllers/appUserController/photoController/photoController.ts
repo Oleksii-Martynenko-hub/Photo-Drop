@@ -4,10 +4,8 @@ import aws from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
 import Stripe from 'stripe';
 import {
-  SelfieMini, Person, Photo_Person, Photo, UserAlbum, PhotoMini, Album, AppUser,
+  SelfieMini, Person, Photo_Person, Photo, UserAlbum, Album, AppUser,
 } from '../../../models/model';
-
-// hjgjhgsdfs
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-08-01',
@@ -17,39 +15,20 @@ aws.config.update({
   region: 'eu-west-1',
   accessKeyId: process.env.S3_ACCESS_KEY_ID,
   secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+  signatureVersion: 'v4', // It fixes the issue of "Missing Authentication Token" when generating presignedUrl for Object lambda Access Point
 });
 
-const checkIfPaid = async (userId:string, albumId:string) :Promise<boolean> => {
-  try {
-    const info = await UserAlbum.findOne({ where: { userId, albumId } });
-    if (info === null) {
-      return false;
-    }
-    if (info.isPaid === false) {
-      return false;
-    }
-    if (info.isPaid === true) {
-      return true;
-    }
-  } catch (e) {
-    console.log(e);
-  }
-  return false;
-};
-
-const generatePaymnet = async (
+const generPaymment = async (
   albumId: string,
   userId: string,
   host: any,
 ): Promise<string | undefined> => {
-  console.log({ host });
-  const success_base_url = host.includes('dev-photodrop') ? 'https://dev-photodrop-client.vercel.app' : 'http://localhost:3000';
   const albumItem = { id: 1, priceInCents: 500, name: 'Album' };
   if (albumId !== undefined && userId !== undefined) {
+    // TODO: create separate service fot the below(Controller- Service separation)
     try {
       const customer = await stripe.customers.create({
         metadata: { userId, albumId },
-        // metadata: { userId: `${userId}`, albumId: `${albumId}` },
       });
 
       const session = await stripe.checkout.sessions.create({
@@ -67,8 +46,8 @@ const generatePaymnet = async (
           quantity: 1,
         }],
         metadata: { userId: `${userId}`, albumId: `${albumId}` },
-        success_url: `${success_base_url}/albums/success${albumId}`,
-        cancel_url: `${success_base_url}/albums/cancel`,
+        success_url: `${host}/albums/success/${albumId}`,
+        cancel_url: `${host}/albums/cancel`,
       });
       const { url } = session;
       if (url) {
@@ -81,14 +60,9 @@ const generatePaymnet = async (
 };
 
 class PhotoController {
-  async signSelfie(req: Request, res: Response) :Promise<void> {
-    interface Body {
-    name: string;
-    userId: string;
-  }
+  async signSelfie(req: Request<any, any, { name: string; userId: string }>, res: Response) :Promise<void> {
     const s3 = new aws.S3();
-    const { name, userId } :Body = req.body;
-    // const metadata = `${userId}`;
+    const { name, userId } = req.body;
     const startIndex = name.indexOf('.') + 1;
     const photoExtension = name.substr(startIndex);
 
@@ -107,7 +81,6 @@ class PhotoController {
   }
 
   async getSelfie(req: Request, res: Response) :Promise<void> {
-    // const appUserId = req.query.appUserId as string|undefined;
     const appUserId = req.query.appUserId as string;
 
     try {
@@ -145,14 +118,13 @@ class PhotoController {
     }
   }
 
-  async getAlbumsWithPerson(req: Request, res: Response): Promise<void> {
-    const phone = `${req.query.phone}`;
+  async getAlbumsWithPerson(req: Request<any, any, any, {phone:string}>, res: Response): Promise<void> {
+    const { phone } = req.query;
     try {
       const person = await Person.findOne({ where: { phone } });
       if (person) {
         const photo_person = await Photo_Person.findAll({ where: { personId: person.id } });
         const photoIds = photo_person.map(({ photoId }) => photoId);
-        // const photos = await Photo.findAll({ where: Sequelize.or({ id: photoIds }) });
         const photos = await Photo.findAll({ where: { id: photoIds } });
         const albumIds = photos.map(({ albumId }) => albumId);
         const uniqueAlbumIds = [...new Set(albumIds)];
@@ -168,13 +140,12 @@ class PhotoController {
     }
   }
 
-  async getAlbumsThumbnailIcon(req: Request, res: Response): Promise<void> {
+  async getAlbumsThumbnailIcon(req: Request<any, any, {albumIds:string[], userId: string}>, res: Response): Promise<void> {
     const s3 = new aws.S3();
     interface ThumbnailsObject{
       [key: string] : string | null
     }
-    const albumIds = req.body.albumIds as string[];
-    const userId = req.body.userId as string;
+    const { albumIds, userId } = req.body;
     const albumThumbnails:ThumbnailsObject = {};
     try {
       const user = await AppUser.findOne({ where: { id: userId } });
@@ -182,29 +153,25 @@ class PhotoController {
       const photoPeople = await Photo_Person.findAll({ where: { personId: person?.id } });
       const photoIds = photoPeople.map((el) => el.photoId);
       const photos = await Photo.findAll({ where: { id: photoIds } });
-      /// //////
-      // const promises = albumIds.map((id) => PhotoMini.findOne({ where: { albumId: id } }));
-      // const albumThumbnailObjects = await Promise.all(promises);
-      // albumThumbnailObjects.forEach((obj) => {
-      //   const url = s3.getSignedUrl('getObject', {
-      //     Bucket: process.env.S3_BUCKET_RESIZED,
-      //     Key: `resized-${obj!.name}`,
-      //     Expires: 60 * 120,
-      //   });
-      //   albumThumbnails[obj!.albumId] = url;
-      // });
+
       albumIds.forEach((albumId) => {
         photos.forEach((photo) => {
           if (albumId === photo.albumId) {
             const url = s3.getSignedUrl('getObject', {
-              Bucket: process.env.S3_BUCKET_RESIZED,
-              Key: `resized-${photo!.name}`,
+              Bucket: process.env.S3_LAMBDA_ACCESS_POINT_IMAGE_RESIZE,
+              Key: photo.name,
               Expires: 60 * 120,
             });
             albumThumbnails[photo!.albumId] = url;
           }
         });
       });
+
+      // const urls = albumIds.map((id) => photos.map((photo) => (id === photo.albumId ? s3.getSignedUrl('getObject', {
+      //   Bucket: process.env.S3_LAMBDA_ACCESS_POINT_IMAGE_RESIZE,
+      //   Key: photo.name,
+      //   Expires: 60 * 120,
+      // }) : '')));
 
       res.json(albumThumbnails);
       // }
@@ -215,12 +182,6 @@ class PhotoController {
   }
 
   async getThumbnails(req: Request, res: Response): Promise<void> {
-    interface Thumbnails {
-            isPaid: boolean,
-            url: string,
-            originalKey: string,
-            albumId: string
-    }
     const userId = req.query.userId as string | undefined;
     const albumId = req.query.albumId as string | undefined;
 
@@ -246,29 +207,27 @@ class PhotoController {
     if (userId && albumId) {
       try {
         const { photos, albumPaidStatus } = await findUserPhoto(userId);
-        const signedThumbnails:Thumbnails[] = [];
+
         if (photos.length > 0) {
-          photos.forEach((photo) => {
-            if (photo) {
-              const s3 = new aws.S3();
-              const url = s3.getSignedUrl('getObject', {
-                Bucket: albumPaidStatus[photo.albumId] === true ? process.env.S3_BUCKET_RESIZED
-                  : process.env.S3_BUCKET_RESIZED_WATERMARK,
-                Key: albumPaidStatus[photo.albumId] === true ? `resized-${photo.name}`
-                  : `resized-watermarkresized-${photo.name}`,
-                Expires: 60 * 120,
-              });
-              signedThumbnails.push({
-                isPaid: albumPaidStatus[photo.albumId],
-                url,
-                originalKey: photo.name,
-                albumId: photo.albumId,
-              });
-            }
+          const signedThumbnails = photos.map((photo) => {
+            const s3 = new aws.S3();
+            const url = s3.getSignedUrl('getObject', {
+              Bucket: albumPaidStatus[photo.albumId] === true ? process.env.S3_LAMBDA_ACCESS_POINT_IMAGE_RESIZE
+                : process.env.S3_LAMBDA_ACCESS_POINT_IMAGE_RESIZE_WATERMARK,
+              Key: photo.name,
+              Expires: 60 * 120,
+            });
+            const thumbnail = {
+              isPaid: albumPaidStatus[photo.albumId],
+              url,
+              originalKey: photo.name,
+              albumId: photo.albumId,
+            };
+            return thumbnail;
           });
+          res.json({ totalPhotos: photos.length, thumbnails: signedThumbnails });
+          return;
         }
-        res.json({ totalPhotos: photos.length, thumbnails: signedThumbnails });
-        return;
       } catch (e) {
         console.log(e);
       }
@@ -279,31 +238,44 @@ class PhotoController {
 
   async getOriginalPhoto(req: Request, res: Response): Promise <void> {
     const s3 = new aws.S3();
-    const host = req.headers.origin as string;
     const { originalKey, albumId, userId } = req.query as { [key: string]: string };
     if (userId && albumId) {
       try {
-        const isPaid = await checkIfPaid(userId, albumId);
-        if (isPaid === true) {
+        const info = await UserAlbum.findOne({ where: { userId, albumId } });
+        if (info && info.isPaid === true) {
           // send original photo
           const url = s3.getSignedUrl('getObject', {
             Bucket: process.env.S3_BUCKET,
             Key: originalKey,
             Expires: 60 * 120,
-            ResponseContentDisposition: 'attachment',
+            // ResponseContentDisposition: 'attachment',
           });
           res.send(`${url}`);
           return;
         }
-        // redirect to the payment page
-        const paymentLink = await generatePaymnet(albumId, userId, host);
-        if (paymentLink) {
-          res.send(`${paymentLink}`);
-          return;
-        }
+        // send original watermarked photo
+        const url = s3.getSignedUrl('getObject', {
+          Bucket: process.env.S3_LAMBDA_ACCESS_POINT_IMAGE_WATERMARK,
+          Key: originalKey,
+          Expires: 60 * 120,
+        });
+        res.send(`${url}`);
+        return;
       } catch (e) {
         console.log(e);
       }
+    }
+  }
+
+  async generatePayment(req: Request, res: Response): Promise <void> {
+    const host = req.headers.origin as string;
+    console.log({ host });
+
+    const { albumId, userId } = req.query as { [key: string]: string };
+    // redirect to the payment page
+    const paymentLink = await generPaymment(albumId, userId, host);
+    if (paymentLink) {
+      res.send(`${paymentLink}`);
     }
   }
 }

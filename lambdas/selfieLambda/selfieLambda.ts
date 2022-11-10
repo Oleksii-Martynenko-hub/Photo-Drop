@@ -8,8 +8,7 @@ import {
 
 // get reference to S3 client
 const s3 = new AWS.S3();
-// @ts-ignore
-const baseHandler = async (event) => {
+const baseHandler = async (event: any) => {
   // Get the object from the event and show its content type
   const bucket = event.Records[0].s3.bucket.name;
   const dstBucket = `${bucket}-resized`;
@@ -81,7 +80,6 @@ const baseHandler = async (event) => {
       // Use the sharp module to resize the image and save in a buffer.
       let buffer;
       try {
-        console.log('is buffer: ', Buffer.isBuffer(origimage.Body));
         // @ts-ignore
         // buffer = await sharp(origimage.Body).resize(width).toBuffer();
         buffer = await Jimp.read(origimage.Body).then((image) => {
